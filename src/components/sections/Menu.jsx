@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+// src/components/sections/Menu.jsx
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/context/CartContext';
 import { toast } from '@/components/ui/use-toast';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { useActiveCategories } from '@/hooks/useCategories';
 
-const menuData = {
+// Datos de ejemplo como fallback (mantener los datos originales como respaldo)
+const fallbackMenuData = {
   "Desayunos": [
     { id: 1, name: "Desayuno Amazónico", description: "Huevos, plátano, yuca y café", price: 8.50, image: "https://images.unsplash.com/photo-1525351484163-7529414344d8" },
     { id: 2, name: "Tostadas Mikuna", description: "Pan artesanal con mermelada de cacao", price: 6.00, image: "https://storage.googleapis.com/hostinger-horizons-assets-prod/37b870c6-b03e-42b3-bd10-1fca720a0822/3ff21d64d4a6558674b2f9f3e7d0d8c7.webp" },
@@ -23,83 +26,231 @@ const menuData = {
   ]
 };
 
+// Componente para mostrar el estado de carga
+const LoadingState = () => (
+  <div className="flex flex-col items-center justify-center py-12">
+    <Loader2 className="h-8 w-8 animate-spin text-amber-600 mb-4" />
+    <p className="text-stone-600">Cargando categorías...</p>
+  </div>
+);
+
+// Componente para mostrar el estado de error
+const ErrorState = ({ error, onRetry, showRetry = true }) => (
+  <div className="flex flex-col items-center justify-center py-8">
+    <AlertCircle className="h-6 w-6 text-amber-500 mb-2" />
+    <p className="text-stone-600 text-sm text-center max-w-md">
+      {showRetry ? 'Usando menú local. ' : ''}
+      {error && `Error: ${error}`}
+    </p>
+    {showRetry && (
+      <Button onClick={onRetry} variant="outline" size="sm" className="mt-3 gap-2">
+        <RefreshCw className="h-4 w-4" />
+        Intentar reconectar
+      </Button>
+    )}
+  </div>
+);
+
+// Componente para mostrar un item del menú
+const MenuItem = ({ item, onAddToCart }) => (
+  <motion.div
+    className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300"
+    whileHover={{ y: -5 }}
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.5 }}
+  >
+    <div className="aspect-w-16 aspect-h-12 bg-stone-200">
+      <img
+        src={item.image_url || item.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c"}
+        alt={item.name}
+        className="w-full h-48 object-cover"
+        onError={(e) => {
+          e.target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c";
+        }}
+      />
+    </div>
+    <div className="p-6">
+      <h3 className="font-serif text-xl font-semibold text-stone-800 mb-2">
+        {item.name}
+      </h3>
+      <p className="text-stone-600 mb-4 text-sm leading-relaxed">
+        {item.description || item.summary || "Deliciosa opción disponible"}
+      </p>
+      <div className="flex items-center justify-between">
+        <span className="text-2xl font-bold text-amber-600">
+          ${typeof item.price === 'number' ? item.price.toFixed(2) : '0.00'}
+        </span>
+        <Button
+          onClick={() => onAddToCart(item)}
+          className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
+        >
+          <PlusCircle className="h-4 w-4" />
+          Agregar
+        </Button>
+      </div>
+    </div>
+  </motion.div>
+);
+
 const Menu = () => {
   const { addToCart } = useCart();
-  const [activeTab, setActiveTab] = useState(Object.keys(menuData)[0]);
+  const [activeTab, setActiveTab] = useState(null);
+  const [menuData, setMenuData] = useState({});
+  const [isUsingFallback, setIsUsingFallback] = useState(false);
+
+  // Hook para obtener categorías de la API
+  const {
+    categories,
+    loading,
+    error,
+    refetch,
+    hasCategories,
+    isEmpty
+  } = useActiveCategories();
+
+  // Efecto para procesar las categorías y establecer el tab activo
+  useEffect(() => {
+    if (hasCategories && categories.length > 0) {
+      // Procesar categorías de la API
+      const processedData = {};
+      categories.forEach(category => {
+        // Por ahora usar datos de fallback para cada categoría
+        // Aquí posteriormente puedes hacer una llamada adicional para obtener productos por categoría
+        const fallbackCategory = Object.keys(fallbackMenuData)[0];
+        processedData[category.name] = fallbackMenuData[fallbackCategory] || [];
+      });
+      setMenuData(processedData);
+      setActiveTab(categories[0].name);
+      setIsUsingFallback(false);
+    } else if (isEmpty && !loading) {
+      // Si no hay categorías de la API, usar datos de fallback
+      console.warn('No se encontraron categorías en la API, usando datos de fallback');
+      setMenuData(fallbackMenuData);
+      setActiveTab(Object.keys(fallbackMenuData)[0]);
+      setIsUsingFallback(true);
+    }
+  }, [categories, hasCategories, isEmpty, loading]);
 
   const handleAddToCart = (item) => {
-    addToCart(item);
+    // Asegurar que el item tenga un precio válido
+    const itemWithPrice = {
+      ...item,
+      price: typeof item.price === 'number' ? item.price : 0
+    };
+    
+    addToCart(itemWithPrice);
     toast({
       title: "¡Añadido al carrito!",
-      description: `${item.name} ha sido añadido a tu pedido.`,
+      description: `${item.name} ha sido agregado a tu pedido.`,
     });
   };
 
+  const handleRetry = () => {
+    refetch();
+  };
+
+  // Estados de carga
+  if (loading) {
+    return (
+      <section id="menu" className="section-padding bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <LoadingState />
+        </div>
+      </section>
+    );
+  }
+
+  // Si no hay datos, usar fallback pero mostrar mensaje
+  if (Object.keys(menuData).length === 0) {
+    setMenuData(fallbackMenuData);
+    setActiveTab(Object.keys(fallbackMenuData)[0]);
+    setIsUsingFallback(true);
+  }
+
   return (
-    <section id="menu" className="section-padding bg-stone-100 dotted-bg">
+    <section id="menu" className="section-padding bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div 
-          className="text-center mb-12"
-          initial={{ opacity: 0, y: 30 }}
+        {/* Header */}
+        <div className="text-center mb-16">
+          <motion.p
+            className="section-subtitle"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            viewport={{ once: true }}
+          >
+            Nuestro Menú
+          </motion.p>
+          <motion.h2
+            className="section-title mb-4"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            viewport={{ once: true }}
+          >
+            Sabores del Amazonas
+          </motion.h2>
+          
+          {/* Mostrar mensaje si hay error pero se usa fallback */}
+          {(error || isUsingFallback) && (
+            <motion.div
+              className="inline-block"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+            >
+              <ErrorState 
+                error={error} 
+                onRetry={handleRetry} 
+                showRetry={!!error && !isUsingFallback}
+              />
+            </motion.div>
+          )}
+        </div>
+
+        {/* Tabs de categorías */}
+        <motion.div
+          className="flex flex-wrap justify-center gap-4 mb-12"
+          initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
+          transition={{ duration: 0.6, delay: 0.4 }}
           viewport={{ once: true }}
         >
-          <p className="section-subtitle">Nuestro Menú</p>
-          <h2 className="section-title">Descubre nuestros sabores</h2>
-        </motion.div>
-
-        <div className="flex justify-center mb-12 border-b border-stone-300">
-          {Object.keys(menuData).map(category => (
+          {Object.keys(menuData).map((category) => (
             <button
               key={category}
               onClick={() => setActiveTab(category)}
-              className={`px-6 py-3 font-semibold text-lg transition-colors duration-300 relative ${
-                activeTab === category ? 'text-amber-600' : 'text-stone-500 hover:text-amber-600'
+              className={`px-6 py-3 rounded-full font-medium transition-all duration-300 ${
+                activeTab === category
+                  ? 'bg-amber-600 text-white shadow-lg'
+                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
               }`}
             >
               {category}
-              {activeTab === category && (
-                <motion.div
-                  className="absolute bottom-0 left-0 right-0 h-1 bg-amber-600"
-                  layoutId="underline"
-                />
-              )}
             </button>
+          ))}
+        </motion.div>
+
+        {/* Items del menú */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {menuData[activeTab]?.map((item, index) => (
+            <MenuItem
+              key={item.id || index}
+              item={item}
+              onAddToCart={handleAddToCart}
+            />
           ))}
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {menuData[activeTab].map(item => (
-            <motion.div
-              key={item.id}
-              className="bg-white rounded-lg shadow-lg overflow-hidden group"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              <div className="relative">
-                <img src={item.image} alt={item.name} className="w-full h-48 object-cover" />
-                <div className="absolute inset-0 bg-black/20"></div>
-                <Button 
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => handleAddToCart(item)}
-                  className="absolute top-2 right-2 bg-white/80 rounded-full text-amber-600 hover:bg-white"
-                >
-                  <PlusCircle />
-                </Button>
-              </div>
-              <div className="p-4">
-                <div className="flex justify-between items-baseline">
-                  <h4 className="font-serif text-xl font-semibold text-stone-800">{item.name}</h4>
-                  <span className="text-xl font-semibold text-amber-600">${item.price.toFixed(2)}</span>
-                </div>
-                <p className="text-stone-500 text-sm mt-1">{item.description}</p>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+        {/* Mensaje si no hay items en la categoría */}
+        {menuData[activeTab]?.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-stone-600">
+              No hay productos disponibles en esta categoría.
+            </p>
+          </div>
+        )}
       </div>
     </section>
   );
