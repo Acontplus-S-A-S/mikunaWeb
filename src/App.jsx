@@ -8,6 +8,7 @@ import { CartProvider } from '@/context/CartContext';
 import Header from '@/components/layout/Header';
 import Hero from '@/components/sections/Hero';
 import About from '@/components/sections/About';
+import Categories from '@/components/sections/Categories';
 import Menu from '@/components/sections/Menu';
 import Gallery from '@/components/sections/Gallery';
 import Testimonials from '@/components/sections/Testimonials';
@@ -56,6 +57,8 @@ function App() {
           
           {/* Sección Acerca de nosotros */}
           <About />
+		  
+		  <Categories /> {/* ← NUEVA SECCIÓN CON TU API */}
           
           {/* Sección del Menú (con integración API) */}
           <Menu />
