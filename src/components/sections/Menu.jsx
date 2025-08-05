@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { useCart } from '@/context/CartContext';
 import { toast } from '@/components/ui/use-toast';
 import { PlusCircle, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
-import { useActiveCategories } from '@/hooks/useCategories';
 
 // Datos de ejemplo como fallback (mantener los datos originales como respaldo)
 const fallbackMenuData = {
@@ -99,15 +98,6 @@ const Menu = () => {
   const [menuData, setMenuData] = useState({});
   const [isUsingFallback, setIsUsingFallback] = useState(false);
 
-  // Hook para obtener categorías de la API
-  const {
-    categories,
-    loading,
-    error,
-    refetch,
-    hasCategories,
-    isEmpty
-  } = useActiveCategories();
 
   // Efecto para procesar las categorías y establecer el tab activo
   useEffect(() => {
